@@ -1,66 +1,36 @@
-# app.py
 import streamlit as st
 import pandas as pd
-import numpy as np
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-st.set_page_config(page_title="Movie Recommender", layout="wide")
+# Load the movies dataset
+movies = pd.read_csv('movies.csv')
 
-@st.cache_data
-def load_data(path="movies.csv"):
-    df = pd.read_csv(path)
-    # Ensure columns exist and no NaNs
-    df['description'] = df.get('description', '').fillna('')
-    df['genres'] = df.get('genres', '').fillna('')
-    df['features'] = (df['genres'].astype(str) + " " + df['description'].astype(str))
-    return df
+# Preprocess: Fill empty descriptions
+movies['description'] = movies['description'].fillna('')
 
-@st.cache_data
-def build_similarity_matrix(features_series):
-    cv = CountVectorizer(stop_words='english')
-    vectors = cv.fit_transform(features_series)
-    sim = cosine_similarity(vectors)
-    return sim
+# Create TF-IDF matrix from descriptions
+tfidf = TfidfVectorizer(stop_words='english')
+tfidf_matrix = tfidf.fit_transform(movies['description'])
 
-def get_recommendations(title, df, sim_matrix, top_n=5):
-    # If title not in dataset, return empty list
-    if title not in df['title'].values:
-        return []
-    idx = int(df[df['title'] == title].index[0])
-    distances = sim_matrix[idx]
-    # Get indices of top matches (excluding the movie itself)
-    idx_sorted = np.argsort(distances)[::-1]
-    idx_sorted = idx_sorted[idx_sorted != idx]  # remove itself
-    top_indices = idx_sorted[:top_n]
-    return df.iloc[top_indices].reset_index(drop=True)
+# Compute cosine similarity matrix
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 
-# --- Load data and similarity matrix ---
-movies = load_data("movies.csv")
-similarity = build_similarity_matrix(movies['features'])
+# Streamlit UI
+st.title('🎬 Movie Recommendation System')
 
-# --- UI ---
-st.title("🎬 Movie Recommendation System (Content-based)")
-st.write("Select a movie and click Recommend to see similar movies.")
+movie_title = st.selectbox('Select a movie you like:', movies['title'].values)
 
-col1, col2 = st.columns([2, 3])
+def get_recommendations(title, cosine_sim=cosine_sim):
+    idx = movies[movies['title'] == title].index[0]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:6]
+    movie_indices = [i[0] for i in sim_scores]
+    return movies.iloc[movie_indices]
 
-with col1:
-    movie_selected = st.selectbox("Choose a movie", movies['title'].tolist())
-    n_recs = st.slider("Number of recommendations", min_value=1, max_value=10, value=5)
-    recommend_btn = st.button("Recommend")
-
-with col2:
-    if recommend_btn:
-        recommendations = get_recommendations(movie_selected, movies, similarity, top_n=n_recs)
-        if recommendations.empty:
-            st.warning("No recommendations found. Check your dataset or pick another title.")
-        else:
-            st.subheader("Recommended Movies")
-            for i, row in recommendations.iterrows():
-                st.markdown(f"{row['title']}**  \nGenres: {row.get('genres','')}")
-                if 'description' in row:
-                    st.write(row['description'])
-                st.write("---")
-    else:
-        st.info("Pick a movie and press Recommend to see suggestions.")
+if st.button('Show Recommendations'):
+    recommendations = get_recommendations(movie_title)
+    for index, row in recommendations.iterrows():
+        poster_url = f"https://image.tmdb.org/t/p/w500{row['poster_path']}"
+        st.image(poster_url, width=150)
+        st.write(f"**{row['title']}** | Genres: {row['genres']}")
