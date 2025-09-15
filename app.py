@@ -3,15 +3,15 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Load the movies dataset
+# Load the dataset
 movies = pd.read_csv('movies.csv')
 
-# Preprocess: Fill empty descriptions
-movies['description'] = movies['description'].fillna('')
+# Fill missing genres
+movies['genres'] = movies['genres'].fillna('')
 
-# Create TF-IDF matrix from descriptions
+# Create TF-IDF matrix from genres
 tfidf = TfidfVectorizer(stop_words='english')
-tfidf_matrix = tfidf.fit_transform(movies['description'])
+tfidf_matrix = tfidf.fit_transform(movies['genres'])
 
 # Compute cosine similarity matrix
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
